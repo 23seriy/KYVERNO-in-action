@@ -47,7 +47,8 @@ spec:
                 - keys:
                     publicKeys: |-
                       -----BEGIN PUBLIC KEY-----
-                      PLACEHOLDER_REPLACED_BY_scripts_03-deploy-app.sh
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkSaQ1+nVnTOQr67yOCSlJY7TJBAr
+                      B0dAmJYjxfsaMATOlCmuD1JvBTOUHGvjtersRK8Dg08TjiPYrpkflke4zQ==
                       -----END PUBLIC KEY-----
                     rekor:
                       ignoreTlog: true

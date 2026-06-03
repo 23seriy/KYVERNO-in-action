@@ -40,21 +40,27 @@ cleanup_bad_pods() {
 apply_expect_fail() {
     local file=$1
     local reason=$2
-    if kubectl apply -f "$file" 2>&1 | tee /tmp/kyverno-apply.out | grep -qE "Error|denied|blocked"; then
+    local out
+    out=$(kubectl apply -f "$file" 2>&1)
+    if echo "$out" | grep -qE "Error|denied|blocked"; then
         info "✅ Rejected by Kyverno — $reason"
-        grep -E "Error|denied|message" /tmp/kyverno-apply.out | head -3 | sed 's/^/    /'
+        echo "$out" | grep -E "Error|denied|message" | head -3 | sed 's/^/    /'
     else
         error "❌ Expected rejection but pod was admitted: $file"
+        echo "$out" | sed 's/^/    [kubectl] /'
     fi
 }
 
 apply_expect_succeed() {
     local file=$1
     local reason=$2
-    if kubectl apply -f "$file" 2>&1 | grep -qE "created|configured|unchanged"; then
+    local out
+    out=$(kubectl apply -f "$file" 2>&1)
+    if echo "$out" | grep -qE "created|configured|unchanged"; then
         info "✅ Admitted — $reason"
     else
-        error "❌ Expected admission but Kyverno rejected: $file"
+        error "❌ Expected admission but apply did not report success: $file"
+        echo "$out" | sed 's/^/    [kubectl] /'
     fi
 }
 

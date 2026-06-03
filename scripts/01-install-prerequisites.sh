@@ -51,6 +51,12 @@ install_if_missing kubectl
 install_if_missing helm
 install_if_missing kyverno
 install_if_missing cosign
+# crane is used to push images to the in-cluster registry from the Mac
+# directly, bypassing dockerd (whose localhost is its own VM, not the Mac).
+install_if_missing crane
+# jq is used by 03-deploy-app.sh to strip Rekor URLs from the Sigstore
+# signing-config (Cosign 3.x replaces --tlog-upload=false).
+install_if_missing jq
 
 echo ""
 echo "================================================"

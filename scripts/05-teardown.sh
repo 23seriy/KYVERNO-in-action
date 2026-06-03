@@ -45,9 +45,11 @@ info "Uninstalling Kyverno..."
 helm uninstall kyverno -n "$KYVERNO_NS" 2>/dev/null || true
 kubectl delete namespace "$KYVERNO_NS" --ignore-not-found 2>/dev/null || true
 
-# Kill the registry port-forward if still running
-if lsof -iTCP:5000 -sTCP:LISTEN -nP 2>/dev/null | grep -q kubectl; then
-    info "Stopping the registry port-forward (kubectl on :5000)..."
+# Kill any stale kubectl port-forwards from previous runs (the deploy
+# script no longer starts one — it uses Docker's host-mapped port — but
+# users who ran an older version may still have one lingering).
+if pgrep -f "port-forward.*registry.*5000:80" >/dev/null; then
+    info "Stopping a stale registry port-forward..."
     pkill -f "port-forward.*registry.*5000:80" 2>/dev/null || true
 fi
 

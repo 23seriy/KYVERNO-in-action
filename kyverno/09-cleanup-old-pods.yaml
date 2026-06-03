@@ -1,6 +1,26 @@
 # End-of-game locker clear-out — Kyverno's cleanup-controller deletes
 # completed pods (Succeeded/Failed) older than a few minutes in dev/demo
 # namespaces. Stops clusters from accumulating "ghost" Job pods forever.
+#
+# Pods aren't in the cleanup-controller's default RBAC — out of the box
+# it only has permissions for a small set of kinds. The ClusterRole below
+# carries the `rbac.kyverno.io/aggregate-to-cleanup-controller: "true"`
+# label, which Kyverno aggregates onto the controller's ServiceAccount.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno-cleanup-pods
+  labels:
+    app.kubernetes.io/component: cleanup-controller
+    app.kubernetes.io/instance: kyverno
+    app.kubernetes.io/part-of: kyverno
+    rbac.kyverno.io/aggregate-to-cleanup-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+---
 apiVersion: kyverno.io/v2
 kind: ClusterCleanupPolicy
 metadata:

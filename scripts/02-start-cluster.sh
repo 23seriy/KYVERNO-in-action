@@ -59,8 +59,34 @@ helm repo add kyverno https://kyverno.github.io/kyverno/ --force-update
 helm repo add policy-reporter https://kyverno.github.io/policy-reporter --force-update
 helm repo update
 
-# Install Kyverno (includes cleanup-controller and reports-controller)
-info "Installing Kyverno via Helm..."
+# Helpers for surfacing what went wrong when a deploy gets stuck.
+diagnose_namespace() {
+    local ns=$1
+    warn "Pods in $ns:"
+    kubectl get pods -n "$ns" -o wide || true
+    warn "Recent events in $ns (last 20):"
+    kubectl get events -n "$ns" --sort-by=.lastTimestamp 2>/dev/null | tail -20 || true
+    warn "Pull errors / Warning conditions in $ns:"
+    kubectl describe pods -n "$ns" 2>/dev/null \
+        | grep -E "Events:|Warning|Failed|ImagePull|ErrImage|OOMKilled" \
+        | head -20 || true
+    warn "If these are ImagePull errors, you're likely out of Docker disk."
+    warn "  docker system df                          # check usage"
+    warn "  minikube delete -p $PROFILE && \\"
+    warn "    docker system prune -af && docker volume prune -af"
+    warn "  ./scripts/02-start-cluster.sh             # retry"
+}
+
+# Install Kyverno (includes cleanup-controller and reports-controller).
+# We don't pass --wait — image pulls on a fresh Minikube can take 5-10 min
+# over a slow connection, and a single Helm timeout swallows the real cause.
+# Instead, install async and follow with kubectl rollout status so failures
+# surface deployment-by-deployment.
+info "Installing Kyverno via Helm (async)..."
+# --allowInsecureRegistries lets the admission + reports controllers reach
+# Minikube's HTTP registry when verifying Cosign signatures (scenario 8).
+# Without it, verifyImages can't fetch the signature blob over HTTP and
+# every signed pod gets rejected.
 helm upgrade --install kyverno kyverno/kyverno \
     --namespace "$KYVERNO_NS" \
     --create-namespace \
@@ -68,22 +94,39 @@ helm upgrade --install kyverno kyverno/kyverno \
     --set backgroundController.replicas=1 \
     --set cleanupController.replicas=1 \
     --set reportsController.replicas=1 \
-    --wait --timeout=5m
+    --set 'admissionController.container.extraArgs.allowInsecureRegistries=true' \
+    --set 'reportsController.container.extraArgs.allowInsecureRegistries=true'
 
-info "Waiting for Kyverno controllers to be ready..."
-kubectl -n "$KYVERNO_NS" rollout status deploy --timeout=180s
+info "Waiting for Kyverno controllers (up to 10 min — first run pulls ~800 MB)..."
+if ! kubectl -n "$KYVERNO_NS" rollout status deploy --timeout=10m; then
+    error "Kyverno controllers did not become ready in 10 min."
+    diagnose_namespace "$KYVERNO_NS"
+    exit 1
+fi
+
+# Sanity-check: confirm the flag is actually on the admission controller
+# (Helm value path can drift between chart versions — fail loud if missing).
+if ! kubectl -n "$KYVERNO_NS" get deploy kyverno-admission-controller -o yaml \
+        | grep -q "allowInsecureRegistries"; then
+    warn "Kyverno admission controller doesn't show --allowInsecureRegistries."
+    warn "Cosign verifyImages (scenario 8) will fail against Minikube's HTTP registry."
+    warn "If you see this, the chart value path may have changed — check 'helm show values kyverno/kyverno'."
+fi
 
 # Install Policy Reporter UI
-info "Installing Policy Reporter UI..."
+info "Installing Policy Reporter UI (async)..."
 helm upgrade --install policy-reporter policy-reporter/policy-reporter \
     --namespace "$POLICY_REPORTER_NS" \
     --create-namespace \
     --set ui.enabled=true \
-    --set kyvernoPlugin.enabled=true \
-    --wait --timeout=5m
+    --set kyvernoPlugin.enabled=true
 
-info "Waiting for Policy Reporter to be ready..."
-kubectl -n "$POLICY_REPORTER_NS" rollout status deploy --timeout=180s
+info "Waiting for Policy Reporter (up to 5 min)..."
+if ! kubectl -n "$POLICY_REPORTER_NS" rollout status deploy --timeout=5m; then
+    error "Policy Reporter did not become ready in 5 min."
+    diagnose_namespace "$POLICY_REPORTER_NS"
+    exit 1
+fi
 
 # Create the demo namespace up front
 info "Creating namespace 'kyverno-demo'..."
