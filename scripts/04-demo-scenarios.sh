@@ -41,7 +41,10 @@ apply_expect_fail() {
     local file=$1
     local reason=$2
     local out
-    out=$(kubectl apply -f "$file" 2>&1)
+    # kubectl exits non-zero when admission denies the request — under
+    # set -euo pipefail, a bare $(...) would abort the script. The || true
+    # keeps the substitution returning 0 so we can inspect the output.
+    out=$(kubectl apply -f "$file" 2>&1) || true
     if echo "$out" | grep -qE "Error|denied|blocked"; then
         info "✅ Rejected by Kyverno — $reason"
         echo "$out" | grep -E "Error|denied|message" | head -3 | sed 's/^/    /'
@@ -55,7 +58,7 @@ apply_expect_succeed() {
     local file=$1
     local reason=$2
     local out
-    out=$(kubectl apply -f "$file" 2>&1)
+    out=$(kubectl apply -f "$file" 2>&1) || true
     if echo "$out" | grep -qE "created|configured|unchanged"; then
         info "✅ Admitted — $reason"
     else
