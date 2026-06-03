@@ -1,0 +1,33 @@
+# BAD: pulls an image that is NOT signed by our Cosign key.
+# Blocked by: kyverno/08-verify-image-signatures.yaml
+#
+# The trash-talk-bot image is deliberately left unsigned by
+# scripts/03-deploy-app.sh — only team-stats-api gets a Cosign signature.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trash-talk-unsigned
+  namespace: kyverno-demo
+  labels:
+    app: trash-talk-bot
+    team: rogue
+    env: demo
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: bot
+      image: localhost:5000/trash-talk-bot:v1
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

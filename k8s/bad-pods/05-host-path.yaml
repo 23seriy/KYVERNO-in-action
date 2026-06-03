@@ -1,0 +1,38 @@
+# BAD: mounts a hostPath volume (escape route to the node filesystem).
+# Blocked by: kyverno/04-pod-security-restricted.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trash-talk-hostpath
+  namespace: kyverno-demo
+  labels:
+    app: trash-talk-bot
+    team: rogue
+    env: demo
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  volumes:
+    - name: node-root
+      hostPath:
+        path: /
+        type: Directory
+  containers:
+    - name: bot
+      image: localhost:5000/trash-talk-bot:v1
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - name: node-root
+          mountPath: /host
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

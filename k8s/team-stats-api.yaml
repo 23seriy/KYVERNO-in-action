@@ -1,0 +1,85 @@
+# Compliant tenant workload. Passes every policy in this demo:
+#   - has required labels (team, env)
+#   - pinned image tag (no :latest)
+#   - resource requests + limits
+#   - runs as a non-root user, no privilege escalation, drops all caps
+#   - image is signed by Cosign (signature added by scripts/03-deploy-app.sh)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: team-stats-api
+  namespace: kyverno-demo
+  labels:
+    app: team-stats-api
+    team: lakers
+    env: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: team-stats-api
+  template:
+    metadata:
+      labels:
+        app: team-stats-api
+        team: lakers
+        env: demo
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: team-stats-api
+          image: localhost:5000/team-stats-api:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: APP_VERSION
+              value: "v1"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: team-stats-api
+  namespace: kyverno-demo
+  labels:
+    app: team-stats-api
+    team: lakers
+    env: demo
+spec:
+  selector:
+    app: team-stats-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP

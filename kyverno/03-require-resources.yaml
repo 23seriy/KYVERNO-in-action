@@ -1,0 +1,41 @@
+# No unlimited minutes — every container must declare CPU + memory requests
+# and limits so the scheduler can do its job and noisy neighbours stay quiet.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-requests-and-limits
+  annotations:
+    policies.kyverno.io/title: Require resource requests and limits
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Pods must declare CPU and memory requests and limits to enable correct
+      bin-packing, prevent noisy-neighbour issues, and unlock HPA/VPA.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - kyverno-demo
+                - tenant-*
+      validate:
+        message: >-
+          Every container must declare resources.requests.{cpu,memory}
+          AND resources.limits.{cpu,memory}.
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"

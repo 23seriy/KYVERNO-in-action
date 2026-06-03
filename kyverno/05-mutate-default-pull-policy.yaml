@@ -1,0 +1,31 @@
+# Coaching adjustment — if a pod arrives without imagePullPolicy set,
+# Kyverno injects IfNotPresent so we don't slam the registry on every restart.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-default-pull-policy
+  annotations:
+    policies.kyverno.io/title: Default imagePullPolicy to IfNotPresent
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: >-
+      When a container omits imagePullPolicy, default it to IfNotPresent
+      instead of the implicit Always-for-:latest behaviour.
+spec:
+  background: false
+  rules:
+    - name: set-pull-policy
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      mutate:
+        foreach:
+          - list: "request.object.spec.containers"
+            patchStrategicMerge:
+              spec:
+                containers:
+                  - name: "{{ element.name }}"
+                    (image): "{{ element.image }}"
+                    imagePullPolicy: IfNotPresent

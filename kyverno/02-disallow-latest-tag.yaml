@@ -1,0 +1,49 @@
+# No undrafted players — every container image must be pinned to a real tag
+# (and definitely not `:latest`, which makes rollbacks impossible).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+  annotations:
+    policies.kyverno.io/title: Disallow :latest image tag
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Forbid the `:latest` tag (and unpinned images) so deployments are
+      reproducible and rollbacks behave deterministically.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: forbid-latest
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - kyverno-demo
+                - tenant-*
+      validate:
+        message: "Image tag `:latest` is forbidden. Pin to a real version."
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                image: "!*:latest"
+    - name: require-explicit-tag
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - kyverno-demo
+                - tenant-*
+      validate:
+        message: "Image must include an explicit tag (e.g. :v1, not bare)."
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                image: "*:*"

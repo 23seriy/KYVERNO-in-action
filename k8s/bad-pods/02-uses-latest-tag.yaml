@@ -1,0 +1,30 @@
+# BAD: image uses the :latest tag.
+# Blocked by: kyverno/02-disallow-latest-tag.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trash-talk-latest
+  namespace: kyverno-demo
+  labels:
+    app: trash-talk-bot
+    team: rogue
+    env: demo
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: bot
+      image: localhost:5000/trash-talk-bot:latest
+      imagePullPolicy: Always
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

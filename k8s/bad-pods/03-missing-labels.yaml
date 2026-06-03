@@ -1,0 +1,28 @@
+# BAD: missing required `team` and `env` labels.
+# Blocked by: kyverno/01-require-labels.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trash-talk-no-labels
+  namespace: kyverno-demo
+  labels:
+    app: trash-talk-bot
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: bot
+      image: localhost:5000/trash-talk-bot:v1
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi
