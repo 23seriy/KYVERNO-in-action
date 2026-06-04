@@ -46,6 +46,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install PyYAML
+        run: pip install pyyaml
+
       - name: Validate policy YAML structure
         run: |
           # Check that policy files are valid YAML and contain required fields
