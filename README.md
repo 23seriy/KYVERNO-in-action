@@ -12,6 +12,15 @@ The demo deploys one compliant tenant app (`team-stats-api`) and a "rogue" workl
 
 > 📝 **Read the full walkthrough on Medium:** _[Link coming soon]_
 
+## 📖 Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** — Architecture, file structure, and common development tasks
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute (features, fixes, docs)
+- **[TESTING.md](TESTING.md)** — Manual and automated testing procedures
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** — Common issues and solutions
+- **[SECURITY.md](SECURITY.md)** — Security policies and responsible disclosure
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — Community guidelines
+
 ## 🏗️ Architecture
 
 ```text
@@ -85,7 +94,7 @@ chmod +x scripts/*.sh
 ./scripts/01-install-prerequisites.sh
 ```
 
-Installs `minikube`, `kubectl`, `helm`, `kyverno` (CLI), and `cosign` via Homebrew.
+Installs `minikube`, `kubectl`, `helm`, `kyverno` (CLI), `cosign`, `crane`, and `jq` via Homebrew. (`crane` is used to push images from the Mac directly, bypassing `dockerd`; `jq` is used to strip Rekor URLs from the Cosign 3.x signing-config — see Step 3 for the why on both.)
 
 ### Step 2: Start Cluster + Install Kyverno
 
@@ -101,12 +110,38 @@ Creates the `kyverno-demo` Minikube profile on **Kubernetes v1.32.0**, enables t
 ./scripts/03-deploy-app.sh
 ```
 
-- Port-forwards the in-cluster registry to `localhost:5000`
-- Builds `team-stats-api:v1` and `trash-talk-bot:v1` images and pushes them
+- Discovers the Docker-mapped host port for the in-cluster registry
+  (e.g. `localhost:58206`) and confirms it's reachable with `curl`
+- Builds `team-stats-api:v1` and `trash-talk-bot:v1` with `docker build`
+- **Pushes via `crane` instead of `docker push`** — see "macOS push path"
+  below for why
 - Generates a Cosign keypair in `cosign/` (gitignored)
 - **Signs only `team-stats-api`** (`trash-talk-bot` stays unsigned on purpose)
 - Patches `kyverno/08-verify-image-signatures.yaml` to embed the real public key
 - Deploys `team-stats-api`
+
+> **Two paths, one registry.** From your laptop, you reach the registry at
+> `localhost:<host-mapped-port>`. From inside the cluster (kubelet pulls,
+> Kyverno's `verifyImages`), it's `localhost:5000` via the in-cluster
+> registry-proxy. Same OCI backend, same image digest, same signature blob —
+> just two access paths. That's why the manifests and policies all
+> reference `localhost:5000` even though pushes go elsewhere.
+
+#### Why crane instead of `docker push` (macOS-specific)
+
+On Docker Desktop, `dockerd` runs inside a Linux VM. When you do
+`docker push localhost:58206/...`, dockerd resolves `localhost` to the
+VM's own loopback — *not* the Mac's. Docker Desktop's host-port
+forwarder only handles inbound from the Mac, so the push hangs with
+`context deadline exceeded`.
+
+`crane` is a single Go binary that pushes images via HTTP **directly from
+the Mac**, using the same network path your browser and `curl` use. It
+reads the image from your local Docker daemon (via `docker save`) and
+streams it to the registry — no dockerd network involvement on the push
+side. Same trick works for `cosign sign`, which already runs on the Mac
+and just needs `--allow-insecure-registry` to talk to Minikube's HTTP
+registry.
 
 ### Step 4: Reach the Compliant App
 

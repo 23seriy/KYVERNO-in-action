@@ -1,0 +1,179 @@
+name: Validate
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  shellcheck:
+    name: Shell Script Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run shellcheck on all scripts
+        run: |
+          shellcheck -x scripts/*.sh
+        continue-on-error: false
+
+  yaml-lint:
+    name: YAML Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Lint Kubernetes manifests
+        run: |
+          yamllint -d relaxed k8s/**/*.yaml
+          yamllint -d relaxed kyverno/*.yaml
+        continue-on-error: false
+
+  kyverno-policy-validation:
+    name: Kyverno Policy Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Validate policy YAML structure
+        run: |
+          # Check that policy files are valid YAML and contain required fields
+          python3 << 'EOF'
+          import yaml
+          import glob
+
+          for policy in glob.glob('kyverno/*.yaml'):
+              print(f"Validating {policy}")
+              try:
+                  # Load all documents in the file
+                  with open(policy) as f:
+                      docs = list(yaml.safe_load_all(f))
+                  if not docs:
+                      print(f"  ERROR: {policy} is empty")
+                      exit(1)
+
+                  # Check that at least one document is a ClusterPolicy or ClusterCleanupPolicy
+                  kinds = [doc.get('kind') for doc in docs if doc]
+                  valid_kinds = {'ClusterPolicy', 'ClusterCleanupPolicy'}
+                  if not any(k in valid_kinds for k in kinds):
+                      print(f"  ERROR: {policy} does not contain ClusterPolicy or ClusterCleanupPolicy")
+                      exit(1)
+              except Exception as e:
+                  print(f"  ERROR: {e}")
+                  exit(1)
+
+          print("✓ All policies have valid YAML syntax and proper structure")
+          EOF
+        continue-on-error: false
+
+  docker-lint:
+    name: Dockerfile Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install hadolint
+        run: |
+          wget -q -O /tmp/hadolint https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x /tmp/hadolint
+          sudo mv /tmp/hadolint /usr/local/bin/hadolint
+
+      - name: Lint Dockerfiles
+        run: |
+          echo "Checking Dockerfile syntax and best practices..."
+          hadolint apps/team-stats-api/Dockerfile || true
+          hadolint apps/trash-talk-bot/Dockerfile || true
+          echo "✓ Dockerfile check complete"
+        continue-on-error: true
+
+  docs-check:
+    name: Documentation Completeness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required docs exist
+        run: |
+          files=(
+            "README.md"
+            "LICENSE"
+            ".gitignore"
+            "CONTRIBUTING.md"
+            "CODE_OF_CONDUCT.md"
+            "SECURITY.md"
+            "TROUBLESHOOTING.md"
+            "CLAUDE.md"
+          )
+          for file in "${files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "Missing: $file"
+              exit 1
+            fi
+          done
+          echo "All required documentation files present"
+
+  script-syntax:
+    name: Script Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: |
+          for script in scripts/*.sh; do
+            echo "Checking $script"
+            bash -n "$script"
+          done
+
+  python-lint:
+    name: Python Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install linting tools
+        run: pip install flake8 pylint black
+
+      - name: Check Python syntax
+        run: |
+          python -m py_compile apps/team-stats-api/app.py
+          python -m py_compile apps/trash-talk-bot/app.py
+
+      - name: Run flake8
+        run: |
+          flake8 apps/ --max-line-length=100
+        continue-on-error: true
+
+      - name: Check code formatting with black
+        run: black --check apps/
+        continue-on-error: true
+
+  markdown-lint:
+    name: Markdown Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: nosborn/github-action-markdown-cli@v3.3.0
+        with:
+          files: .
+          config_file: .markdownlint.json
+        continue-on-error: true

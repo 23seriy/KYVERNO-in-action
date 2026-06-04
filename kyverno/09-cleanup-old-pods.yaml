@@ -1,0 +1,53 @@
+# End-of-game locker clear-out — Kyverno's cleanup-controller deletes
+# completed pods (Succeeded/Failed) older than a few minutes in dev/demo
+# namespaces. Stops clusters from accumulating "ghost" Job pods forever.
+#
+# Pods aren't in the cleanup-controller's default RBAC — out of the box
+# it only has permissions for a small set of kinds. The ClusterRole below
+# carries the `rbac.kyverno.io/aggregate-to-cleanup-controller: "true"`
+# label, which Kyverno aggregates onto the controller's ServiceAccount.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kyverno-cleanup-pods
+  labels:
+    app.kubernetes.io/component: cleanup-controller
+    app.kubernetes.io/instance: kyverno
+    app.kubernetes.io/part-of: kyverno
+    rbac.kyverno.io/aggregate-to-cleanup-controller: "true"
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "delete"]
+---
+apiVersion: kyverno.io/v2
+kind: ClusterCleanupPolicy
+metadata:
+  name: cleanup-completed-pods
+  annotations:
+    policies.kyverno.io/title: Cleanup completed pods
+    policies.kyverno.io/category: Cleanup
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: >-
+      Every minute, delete pods in `kyverno-demo` and `tenant-*` that have
+      finished (Succeeded or Failed) more than 60 seconds ago.
+spec:
+  # Run every minute. (Real prod usage would be 1h+ — the short window
+  # makes the demo observable.)
+  schedule: "*/1 * * * *"
+  match:
+    any:
+      - resources:
+          kinds: [Pod]
+          namespaces:
+            - kyverno-demo
+            - "tenant-*"
+  conditions:
+    any:
+      - key: "{{ target.status.phase }}"
+        operator: Equals
+        value: "Succeeded"
+      - key: "{{ target.status.phase }}"
+        operator: Equals
+        value: "Failed"

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kyverno-demo
+  labels:
+    name: kyverno-demo
+    env: demo
+    team: platform

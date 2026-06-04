@@ -1,0 +1,23 @@
+# BAD: no resource requests or limits.
+# Blocked by: kyverno/03-require-resources.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trash-talk-no-resources
+  namespace: kyverno-demo
+  labels:
+    app: trash-talk-bot
+    team: rogue
+    env: demo
+spec:
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+  containers:
+    - name: bot
+      image: localhost:5000/trash-talk-bot:v1
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]

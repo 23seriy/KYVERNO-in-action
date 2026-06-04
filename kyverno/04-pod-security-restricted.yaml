@@ -1,0 +1,103 @@
+# Locker-room rules — enforce the Kubernetes Pod Security "restricted"
+# profile in the demo namespace.
+#
+# Why not just use the built-in PodSecurity admission plugin? Two reasons:
+#   1. Kyverno reports violations through PolicyReports (one consistent view
+#      with all your other policies).
+#   2. You can customize per-namespace, exempt specific workloads via
+#      PolicyException, and combine with mutate rules. Pure PSA is binary.
+#
+# This is the canonical Kyverno PSS-restricted bundle, condensed.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pod-security-restricted
+  annotations:
+    policies.kyverno.io/title: Pod Security — Restricted
+    policies.kyverno.io/category: Pod Security Standards (Restricted)
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Enforces the Pod Security "restricted" profile in kyverno-demo
+      and tenant-* namespaces: no privileged, no hostPath, must run as
+      non-root, drop ALL capabilities, no privilege escalation.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: disallow-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+    - name: disallow-host-path
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "hostPath volumes are not allowed."
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.volumes[?hostPath] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+    - name: require-run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Containers must set runAsNonRoot=true (pod or container level)."
+        anyPattern:
+          - spec:
+              securityContext:
+                runAsNonRoot: true
+              containers:
+                - =(securityContext):
+                    =(runAsNonRoot): true
+          - spec:
+              containers:
+                - securityContext:
+                    runAsNonRoot: true
+    - name: disallow-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "allowPrivilegeEscalation must be set to false."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false
+    - name: require-drop-all-capabilities
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Containers must drop ALL Linux capabilities."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  capabilities:
+                    drop:
+                      - "ALL"

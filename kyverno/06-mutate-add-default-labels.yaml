@@ -1,0 +1,33 @@
+# Coaching adjustment, part 2 — if a pod arrives without an `env` label,
+# inject one based on the namespace name. (`team` we can't guess, so the
+# require-labels policy still rejects pods missing that.)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: mutate-default-env-label
+  annotations:
+    policies.kyverno.io/title: Default env label from namespace
+    policies.kyverno.io/category: Ownership
+    policies.kyverno.io/severity: low
+    policies.kyverno.io/description: >-
+      Inject `env=<namespace>` label on pods that arrive without one.
+      Keeps cost reports and alerting consistent without nagging tenants.
+spec:
+  background: false
+  rules:
+    - name: inject-env-label
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.env || '' }}"
+            operator: Equals
+            value: ""
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              env: "{{ request.namespace }}"

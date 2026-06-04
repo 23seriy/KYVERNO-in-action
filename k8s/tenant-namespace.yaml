@@ -1,0 +1,14 @@
+# Create this namespace AFTER applying kyverno/07-generate-tenant-defaults.yaml.
+# Kyverno's Generate rule fires on the `tenant` label and materializes:
+#   - a default-deny NetworkPolicy
+#   - a ResourceQuota
+#   - a LimitRange
+# inside the new namespace — zero manual setup for the tenant.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-hawks
+  labels:
+    tenant: hawks
+    env: demo
+    team: hawks

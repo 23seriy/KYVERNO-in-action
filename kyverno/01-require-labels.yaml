@@ -1,0 +1,35 @@
+# Team jerseys at the door — every Pod (and Deployment template) in the
+# kyverno-demo namespace must declare `team` and `env` labels.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-team-and-env-labels
+  annotations:
+    policies.kyverno.io/title: Require team and env labels
+    policies.kyverno.io/category: Ownership
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Every Pod, Deployment, StatefulSet and Job must carry `team` and `env`
+      labels so we can attribute cost, route alerts, and group resources.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-labels
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - kyverno-demo
+                - tenant-*
+      validate:
+        message: >-
+          Pods in this namespace must include `team` and `env` labels.
+          Found labels: {{ request.object.metadata.labels || `{}` }}
+        pattern:
+          metadata:
+            labels:
+              team: "?*"
+              env: "?*"

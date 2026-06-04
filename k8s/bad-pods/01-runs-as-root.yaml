@@ -1,0 +1,26 @@
+# BAD: runs as root (UID 0).
+# Blocked by: kyverno/04-pod-security-restricted.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trash-talk-root
+  namespace: kyverno-demo
+  labels:
+    app: trash-talk-bot
+    team: rogue
+    env: demo
+spec:
+  containers:
+    - name: bot
+      image: localhost:5000/trash-talk-bot:v1
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        runAsUser: 0
+        runAsNonRoot: false
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 100m
+          memory: 128Mi

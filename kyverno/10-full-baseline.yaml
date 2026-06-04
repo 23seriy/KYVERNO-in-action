@@ -1,0 +1,158 @@
+# Production baseline — applying this single file (plus 07 + 08 + 09 which
+# stand on their own) gives you the hardened end state from the demo.
+#
+# It bundles:
+#   - require-labels       (team, env)
+#   - disallow-:latest     (+ require explicit tag)
+#   - require-resources    (requests + limits)
+#   - PSS-restricted       (non-root, no privileged, no hostPath, drop ALL,
+#                           no privilege escalation)
+#   - mutate-pull-policy   (default to IfNotPresent)
+#   - mutate-env-label     (default to namespace name when missing)
+#
+# Image verification (08) and Generate (07) and Cleanup (09) are intentionally
+# kept separate — they have different lifecycles and you may want to roll
+# them out independently.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: production-baseline
+  annotations:
+    policies.kyverno.io/title: Production baseline
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      One-stop policy bundle: labels, image tags, resources, PSS-restricted,
+      plus mutations that nudge teams toward the happy path.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    # ---- Validate ----
+    - name: require-team-and-env
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Pods must include `team` and `env` labels."
+        pattern:
+          metadata:
+            labels:
+              team: "?*"
+              env: "?*"
+
+    - name: disallow-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Image tag `:latest` is forbidden."
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                image: "!*:latest"
+
+    - name: require-resources
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Every container must declare requests + limits for cpu and memory."
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"
+
+    - name: pss-disallow-privileged
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Privileged containers are not allowed."
+        pattern:
+          spec:
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+
+    - name: pss-disallow-host-path
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "hostPath volumes are not allowed."
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.volumes[?hostPath] | length(@) }}"
+                operator: GreaterThan
+                value: 0
+
+    - name: pss-require-non-root-and-no-escalation
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Containers must runAsNonRoot, drop ALL caps, and disable privilege escalation."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]
+
+    # ---- Mutate ----
+    - name: default-pull-policy
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      mutate:
+        foreach:
+          - list: "request.object.spec.containers"
+            patchStrategicMerge:
+              spec:
+                containers:
+                  - name: "{{ element.name }}"
+                    (image): "{{ element.image }}"
+                    imagePullPolicy: IfNotPresent
+
+    - name: default-env-label
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      preconditions:
+        all:
+          - key: "{{ request.object.metadata.labels.env || '' }}"
+            operator: Equals
+            value: ""
+      mutate:
+        patchStrategicMerge:
+          metadata:
+            labels:
+              env: "{{ request.namespace }}"
