@@ -12,6 +12,15 @@ The demo deploys one compliant tenant app (`team-stats-api`) and a "rogue" workl
 
 > 📝 **Read the full walkthrough on Medium:** _[Link coming soon]_
 
+## 📖 Documentation
+
+- **[CLAUDE.md](CLAUDE.md)** — Architecture, file structure, and common development tasks
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — How to contribute (features, fixes, docs)
+- **[TESTING.md](TESTING.md)** — Manual and automated testing procedures
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** — Common issues and solutions
+- **[SECURITY.md](SECURITY.md)** — Security policies and responsible disclosure
+- **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** — Community guidelines
+
 ## 🏗️ Architecture
 
 ```text

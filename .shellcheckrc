@@ -1,0 +1,4 @@
+# Shellcheck configuration for kyverno-in-action scripts
+# SC2086: Quote variables to prevent word splitting (we allow this in some cases)
+# SC2181: Check exit code directly rather than through a variable
+disable=SC1091
