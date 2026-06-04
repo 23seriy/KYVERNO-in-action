@@ -52,14 +52,32 @@ jobs:
       - name: Validate policy YAML structure
         run: |
           # Check that policy files are valid YAML and contain required fields
-          for policy in kyverno/*.yaml; do
-            echo "Validating $policy"
-            # Check YAML syntax
-            python3 -c "import yaml; yaml.safe_load(open('$policy'))" || exit 1
-            # Check that it's a ClusterPolicy
-            grep -q "kind: ClusterPolicy\|kind: ClusterCleanupPolicy" "$policy" || exit 1
-          done
-          echo "✓ All policies have valid YAML syntax and are ClusterPolicy definitions"
+          python3 << 'EOF'
+          import yaml
+          import glob
+
+          for policy in glob.glob('kyverno/*.yaml'):
+              print(f"Validating {policy}")
+              try:
+                  # Load all documents in the file
+                  with open(policy) as f:
+                      docs = list(yaml.safe_load_all(f))
+                  if not docs:
+                      print(f"  ERROR: {policy} is empty")
+                      exit(1)
+
+                  # Check that at least one document is a ClusterPolicy or ClusterCleanupPolicy
+                  kinds = [doc.get('kind') for doc in docs if doc]
+                  valid_kinds = {'ClusterPolicy', 'ClusterCleanupPolicy'}
+                  if not any(k in valid_kinds for k in kinds):
+                      print(f"  ERROR: {policy} does not contain ClusterPolicy or ClusterCleanupPolicy")
+                      exit(1)
+              except Exception as e:
+                  print(f"  ERROR: {e}")
+                  exit(1)
+
+          print("✓ All policies have valid YAML syntax and proper structure")
+          EOF
         continue-on-error: false
 
   docker-lint:
