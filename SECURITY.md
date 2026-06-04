@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in kyverno-in-action, please **do not** open a public GitHub issue. Instead, please report it responsibly by emailing [security@example.com](mailto:security@example.com) with:
+If you discover a security vulnerability in kyverno-in-action, please **do not** open a public GitHub issue. Instead, please report it responsibly by emailing [23seriy@gmail.com](mailto:23seriy@gmail.com) with:
 
 - A description of the vulnerability
 - Steps to reproduce it
