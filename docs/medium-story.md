@@ -163,6 +163,12 @@ This is the default world. It's also the world most clusters start out in, becau
 
 ## Scenario 2: Validate — Team Jerseys at the Door
 
+First, clean up any bad pods from Scenario 1:
+
+```bash
+kubectl delete pods -n kyverno-demo trash-talk-root trash-talk-no-labels trash-talk-latest --ignore-not-found
+```
+
 Our first policy. Every pod in `kyverno-demo` must declare a `team` and an `env` label:
 
 ```yaml
@@ -195,7 +201,7 @@ A few details about this YAML are worth slowing down on:
 - `background: true` — also scan **existing** pods when this policy is created. If a pod was admitted before the policy existed, you still get visibility on the violation.
 - `pattern: ... "?*"` — Kyverno's pattern syntax. `"?*"` means "any non-empty string." Combined with the `metadata.labels` object pattern, this enforces the presence of both keys.
 
-Apply it, then try the rogue pod with no labels:
+Now apply the policy first, then try the rogue pod with no labels:
 
 ```bash
 kubectl apply -f kyverno/01-require-labels.yaml
@@ -212,6 +218,13 @@ That's the experience we want — a clear, actionable error at `kubectl apply` t
 
 ## Scenario 3: No `:latest` — No Undrafted Players
 
+Clean up from Scenario 2:
+
+```bash
+kubectl delete clusterpolicy require-team-and-env-labels
+kubectl delete pods -n kyverno-demo trash-talk-no-labels --ignore-not-found
+```
+
 `:latest` is the most common foot-gun in Kubernetes. It silently breaks rollbacks, it's invisible in git history, and it makes incident forensics miserable.
 
 ```yaml
@@ -227,9 +240,27 @@ That's the experience we want — a clear, actionable error at `kubectl apply` t
 
 The `!*:latest` is the negation pattern: "anything **except** a string ending in `:latest`." There's a sibling rule that requires an explicit tag (`*:*`), so bare image references (which K8s implicitly turns into `:latest`) are also rejected.
 
+Apply the policy and test:
+
+```bash
+kubectl apply -f kyverno/02-disallow-latest-tag.yaml
+kubectl apply -f k8s/bad-pods/02-uses-latest-tag.yaml
+# Error from server: admission webhook "validate.kyverno.svc-fail" denied
+# the request: resource Pod/.../trash-talk-latest was blocked due to
+# the following policies disallow-latest-tag: forbid-latest:
+# 'Image tag `:latest` is forbidden. Pin to a real version.'
+```
+
 ---
 
 ## Scenario 4: Pod Security — Locker Room Rules
+
+Clean up from Scenario 3:
+
+```bash
+kubectl delete clusterpolicy disallow-latest-tag
+kubectl delete pods -n kyverno-demo trash-talk-latest --ignore-not-found
+```
 
 Now the big one: the Pod Security Standards "restricted" profile.
 
@@ -241,6 +272,8 @@ Kubernetes ships a built-in [PodSecurity admission plugin](https://kubernetes.io
 
 The policy bundles five rules: disallow privileged, disallow hostPath, require non-root, disallow privilege escalation, drop ALL capabilities.
 
+Apply the policy, then test the rogue pods:
+
 ```bash
 kubectl apply -f kyverno/04-pod-security-restricted.yaml
 kubectl apply -f k8s/bad-pods/01-runs-as-root.yaml      # rejected
@@ -251,6 +284,13 @@ kubectl apply -f k8s/bad-pods/06-privileged.yaml        # rejected
 ---
 
 ## Scenario 5: Mutate — The Coach Adjusts the Lineup
+
+Clean up from Scenario 4:
+
+```bash
+kubectl delete clusterpolicy pod-security-restricted
+kubectl delete pods -n kyverno-demo trash-talk-root trash-talk-host-path trash-talk-privileged --ignore-not-found
+```
 
 Validation is great for "reject the bad thing." But sometimes you want "fix the bad thing." That's mutation.
 
@@ -283,6 +323,20 @@ Two rules together:
           env: "{{ request.namespace }}"
 ```
 
+Apply the mutation policy and deploy a compliant pod to see the mutations:
+
+```bash
+kubectl apply -f kyverno/05-mutate-add-default-labels.yaml
+kubectl apply -f kyverno/06-mutate-default-pull-policy.yaml
+kubectl apply -f k8s/team-stats-api.yaml
+
+# Check that the mutations were applied
+kubectl get pod -n kyverno-demo team-stats-api-74798c8d4b-tfrsz -o yaml | grep -A 2 "imagePullPolicy\|env:"
+# imagePullPolicy: IfNotPresent
+# env:
+# - name: "kyverno-demo"
+```
+
 Apply a pod with no `env` label and no `imagePullPolicy` — `kubectl get pod -o yaml` after admission will show both fields injected. The pod author never had to think about them. The platform's defaults are no longer a wiki page; they're code.
 
 This is the difference between **"please remember the env label"** and **"we'll add it for you, here are the rules."** One of those scales.
@@ -290,6 +344,12 @@ This is the difference between **"please remember the env label"** and **"we'll 
 ---
 
 ## Scenario 6: Generate — New Franchise Setup
+
+Clean up from Scenario 5:
+
+```bash
+kubectl delete clusterpolicy mutate-add-default-labels mutate-default-pull-policy
+```
 
 This is the Kyverno feature that most surprises people. When a parent resource appears, Kyverno can **generate child resources** automatically.
 
@@ -325,7 +385,7 @@ Without Kyverno, you'd either ship a Helm chart per tenant or hope the tenant re
 
 `synchronize: true` is the part that earns its keep — Kyverno **reconciles drift**. If a tenant edits the generated NetworkPolicy, Kyverno reverts it. You get baseline-as-code that defends itself.
 
-Apply, then create the tenant namespace:
+Apply the policy first, then create the tenant namespace:
 
 ```bash
 kubectl apply -f kyverno/07-generate-tenant-defaults.yaml
@@ -345,6 +405,13 @@ Three resources, materialized automatically. Multiply this by 50 tenant namespac
 ---
 
 ## Scenario 7: Verify Images — Player ID Check (the Cosign Demo)
+
+Clean up from Scenario 6:
+
+```bash
+kubectl delete clusterpolicy generate-tenant-defaults
+kubectl delete namespace tenant-hawks --ignore-not-found
+```
 
 This is the supply-chain story everyone wants to tell right now.
 
@@ -399,6 +466,13 @@ That's a real supply-chain story. An attacker who pushes a malicious image to yo
 
 ## Scenario 8: Cleanup — End-of-Game Locker Clear-Out
 
+Clean up from Scenario 7:
+
+```bash
+kubectl delete clusterpolicy verify-image-signatures
+kubectl delete pods -n kyverno-demo --all --ignore-not-found
+```
+
 Kyverno's cleanup-controller is the newest of the four controllers, and it's deceptively powerful. It lets you write a `ClusterCleanupPolicy` that runs on a cron schedule and deletes resources matching a query.
 
 ```yaml
@@ -423,6 +497,18 @@ spec:
         value: "Failed"
 ```
 
+Apply the cleanup policy and test it:
+
+```bash
+kubectl apply -f kyverno/09-cleanup-old-pods.yaml
+
+# Create a test Job to verify cleanup
+kubectl create job test-job --image=busybox -n kyverno-demo -- sh -c 'echo "done"; exit 0'
+
+# Watch for the pod to appear in Succeeded phase, then disappear within ~60 seconds
+kubectl get pods -n kyverno-demo -w
+```
+
 Every minute, the cleanup-controller deletes pods in `Succeeded` or `Failed` phase. Run a Job, watch the completed pod disappear within ~60 seconds.
 
 This solves the "why is my dev cluster full of `Job-foo-xxxxx` pods from three months ago" problem with three lines of YAML.
@@ -431,7 +517,16 @@ This solves the "why is my dev cluster full of `Job-foo-xxxxx` pods from three m
 
 ## Scenario 9: Policy Reports — The Referee's Report
 
+Clean up from Scenario 8 to prepare for the full baseline:
+
+```bash
+kubectl delete clustercleanuuppolicy cleanup-completed-pods
+kubectl delete jobs -n kyverno-demo --all --ignore-not-found
+```
+
 The deep reason to use Kyverno over PSA: **everything ends up in a `PolicyReport`.**
+
+When multiple policies are active and violations occur, Kyverno automatically generates PolicyReports:
 
 ```bash
 kubectl get policyreport -A
@@ -443,7 +538,7 @@ kubectl get policyreport -A
 
 For an auditor question like "show me every pod that violated PSS-restricted in the last 30 days," that's `kubectl get policyreport` plus your usual retention. No screenshot hunt, no ad-hoc `jq` query.
 
-The Policy Reporter UI (which we installed in step 2) gives the same data in chart form:
+The Policy Reporter UI (which we installed earlier) gives the same data in chart form:
 
 ```bash
 kubectl port-forward -n policy-reporter svc/policy-reporter-ui 8082:8080
@@ -456,13 +551,33 @@ That UI is the artefact you show the security team during your quarterly review.
 
 ## Scenario 10: The Full Baseline
 
-Everything together, in one bundle:
+Clean up all policies from previous scenarios:
 
 ```bash
-kubectl apply -f kyverno/10-full-baseline.yaml
+kubectl delete clusterpolicies --all
+kubectl delete clustercleanuuppolicies --all
+kubectl delete pods,deployments -n kyverno-demo --all --ignore-not-found
+kubectl delete namespace tenant-hawks --ignore-not-found
+```
+
+Now deploy the complete security baseline with all five Kyverno features together:
+
+```bash
+kubectl apply -f kyverno/01-require-labels.yaml
+kubectl apply -f kyverno/02-disallow-latest-tag.yaml
+kubectl apply -f kyverno/03-require-resources.yaml
+kubectl apply -f kyverno/04-pod-security-restricted.yaml
+kubectl apply -f kyverno/05-mutate-add-default-labels.yaml
+kubectl apply -f kyverno/06-mutate-default-pull-policy.yaml
 kubectl apply -f kyverno/07-generate-tenant-defaults.yaml
 kubectl apply -f kyverno/08-verify-image-signatures.yaml
 kubectl apply -f kyverno/09-cleanup-old-pods.yaml
+```
+
+Or use the bundled full baseline:
+
+```bash
+kubectl apply -f kyverno/10-full-baseline.yaml
 ```
 
 The end state:
@@ -473,7 +588,27 @@ The end state:
 - **Verify Images** — Cosign signature required
 - **Cleanup** — completed pods swept every minute
 
-The compliant `team-stats-api` passes everything. Every rogue pod gets rejected by something.
+Now test with the compliant and rogue workloads:
+
+```bash
+# Compliant app — passes all policies
+kubectl apply -f k8s/team-stats-api.yaml      # ✅ admitted
+
+# Try the rogue pods — all rejected
+kubectl apply -f k8s/bad-pods/01-runs-as-root.yaml      # ❌ rejected
+kubectl apply -f k8s/bad-pods/02-uses-latest-tag.yaml   # ❌ rejected
+kubectl apply -f k8s/bad-pods/03-missing-labels.yaml    # ❌ rejected
+kubectl apply -f k8s/bad-pods/04-no-resources.yaml      # ❌ rejected
+kubectl apply -f k8s/bad-pods/05-host-path.yaml         # ❌ rejected
+kubectl apply -f k8s/bad-pods/06-privileged.yaml        # ❌ rejected
+kubectl apply -f k8s/bad-pods/07-unsigned-image.yaml    # ❌ rejected
+
+# View the PolicyReports
+kubectl get policyreport -A
+kubectl describe policyreport -n kyverno-demo
+```
+
+The compliant `team-stats-api` passes everything. Every rogue pod gets rejected by something. Your cluster is now hardened from the door.
 
 ---
 

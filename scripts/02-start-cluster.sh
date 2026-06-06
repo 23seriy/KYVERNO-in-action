@@ -11,10 +11,12 @@ POLICY_REPORTER_NS="policy-reporter"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 info()  { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
+error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 echo ""
 echo "================================================"
@@ -83,7 +85,7 @@ diagnose_namespace() {
 # Instead, install async and follow with kubectl rollout status so failures
 # surface deployment-by-deployment.
 info "Installing Kyverno via Helm (async)..."
-# --allowInsecureRegistries lets the admission + reports controllers reach
+# --allowInsecureRegistry lets the admission + reports controllers reach
 # Minikube's HTTP registry when verifying Cosign signatures (scenario 8).
 # Without it, verifyImages can't fetch the signature blob over HTTP and
 # every signed pod gets rejected.
@@ -94,8 +96,8 @@ helm upgrade --install kyverno kyverno/kyverno \
     --set backgroundController.replicas=1 \
     --set cleanupController.replicas=1 \
     --set reportsController.replicas=1 \
-    --set 'admissionController.container.extraArgs.allowInsecureRegistries=true' \
-    --set 'reportsController.container.extraArgs.allowInsecureRegistries=true'
+    --set 'admissionController.container.extraArgs.allowInsecureRegistry=true' \
+    --set 'reportsController.container.extraArgs.allowInsecureRegistry=true'
 
 info "Waiting for Kyverno controllers (up to 10 min — first run pulls ~800 MB)..."
 if ! kubectl -n "$KYVERNO_NS" rollout status deploy --timeout=10m; then
@@ -107,8 +109,8 @@ fi
 # Sanity-check: confirm the flag is actually on the admission controller
 # (Helm value path can drift between chart versions — fail loud if missing).
 if ! kubectl -n "$KYVERNO_NS" get deploy kyverno-admission-controller -o yaml \
-        | grep -q "allowInsecureRegistries"; then
-    warn "Kyverno admission controller doesn't show --allowInsecureRegistries."
+        | grep -q "allowInsecureRegistry"; then
+    warn "Kyverno admission controller doesn't show --allowInsecureRegistry."
     warn "Cosign verifyImages (scenario 8) will fail against Minikube's HTTP registry."
     warn "If you see this, the chart value path may have changed — check 'helm show values kyverno/kyverno'."
 fi
