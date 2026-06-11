@@ -10,7 +10,7 @@ The demo deploys one compliant tenant app (`team-stats-api`) and a "rogue" workl
 ![Cosign](https://img.shields.io/badge/Cosign-signed-2EBB59?logo=sigstore&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 
-> 📝 **Read the full walkthrough on Medium:** _[Link coming soon]_
+> 📝 **Read the full walkthrough on Medium:** [Kyverno in Action: Policy as Code & Admission Control for Kubernetes — From Free-for-All to…](https://medium.com/@sergeiolshanetski/kyverno-in-action-policy-as-code-admission-control-for-kubernetes-from-free-for-all-to-17e41becf176)
 
 ## 📖 Documentation
 
