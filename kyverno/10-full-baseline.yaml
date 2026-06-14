@@ -57,6 +57,20 @@ spec:
               - name: "*"
                 image: "!*:latest"
 
+    - name: require-explicit-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [kyverno-demo, "tenant-*"]
+      validate:
+        message: "Image must include an explicit tag (e.g. :v1, not bare)."
+        pattern:
+          spec:
+            containers:
+              - name: "*"
+                image: "*:*"
+
     - name: require-resources
       match:
         any:

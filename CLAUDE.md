@@ -194,7 +194,7 @@ The compliant app (`team-stats-api`) is intentionally simple — it serves NBA s
 
 ### Cosign Workflow
 
-- `03-deploy-app.sh` generates a keypair if `cosign/cosign.pub` and `cosign/cosign.priv` don't exist
+- `03-deploy-app.sh` generates a keypair if `cosign/cosign.key` and `cosign/cosign.pub` don't exist
 - Keys are gitignored so they don't leak
 - Only `team-stats-api` is signed to demonstrate the difference between signed and unsigned images in the verification scenario
 - The public key is extracted and inlined into `kyverno/08-verify-image-signatures.yaml`
