@@ -156,7 +156,7 @@ The script patches `kyverno/08-verify-image-signatures.yaml` with the public key
 
 3. If the key is missing, regenerate and re-patch:
    ```bash
-   rm cosign/cosign.pub cosign/cosign.priv
+   rm cosign/cosign.key cosign/cosign.pub
    ./scripts/03-deploy-app.sh
    ```
 

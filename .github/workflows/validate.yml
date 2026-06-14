@@ -11,7 +11,7 @@ jobs:
     name: Shell Script Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Install shellcheck
         run: sudo apt-get install -y shellcheck
@@ -25,14 +25,14 @@ jobs:
     name: YAML Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Install yamllint
         run: pip install yamllint
 
       - name: Lint Kubernetes manifests
         run: |
-          yamllint -d relaxed k8s/**/*.yaml
+          find k8s -name '*.yaml' -print0 | xargs -0 yamllint -d relaxed
           yamllint -d relaxed kyverno/*.yaml
         continue-on-error: false
 
@@ -40,9 +40,9 @@ jobs:
     name: Kyverno Policy Syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
@@ -55,8 +55,10 @@ jobs:
           python3 << 'EOF'
           import yaml
           import glob
+          import sys
 
-          for policy in glob.glob('kyverno/*.yaml'):
+          errors = 0
+          for policy in sorted(glob.glob('kyverno/*.yaml')):
               print(f"Validating {policy}")
               try:
                   # Load all documents in the file
@@ -64,19 +66,26 @@ jobs:
                       docs = list(yaml.safe_load_all(f))
                   if not docs:
                       print(f"  ERROR: {policy} is empty")
-                      exit(1)
+                      errors += 1
+                      continue
 
-                  # Check that at least one document is a ClusterPolicy or ClusterCleanupPolicy
+                  # Check that at least one document is a Kyverno policy kind
+                  # (files may also contain supporting resources like ClusterRoles)
                   kinds = [doc.get('kind') for doc in docs if doc]
                   valid_kinds = {'ClusterPolicy', 'ClusterCleanupPolicy'}
                   if not any(k in valid_kinds for k in kinds):
                       print(f"  ERROR: {policy} does not contain ClusterPolicy or ClusterCleanupPolicy")
-                      exit(1)
+                      errors += 1
+                      continue
+                  print(f"  OK — kinds: {kinds}")
               except Exception as e:
                   print(f"  ERROR: {e}")
-                  exit(1)
+                  errors += 1
 
-          print("✓ All policies have valid YAML syntax and proper structure")
+          if errors:
+              print(f"\n✗ {errors} policy file(s) failed validation")
+              sys.exit(1)
+          print("\n✓ All policies have valid YAML syntax and proper structure")
           EOF
         continue-on-error: false
 
@@ -84,7 +93,7 @@ jobs:
     name: Dockerfile Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Install hadolint
         run: |
@@ -104,7 +113,7 @@ jobs:
     name: Documentation Completeness
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Check required docs exist
         run: |
@@ -130,7 +139,7 @@ jobs:
     name: Script Syntax Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Check bash syntax
         run: |
@@ -143,9 +152,9 @@ jobs:
     name: Python Code Quality
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
@@ -170,7 +179,7 @@ jobs:
     name: Markdown Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - uses: nosborn/github-action-markdown-cli@v3.5.0
         with:
