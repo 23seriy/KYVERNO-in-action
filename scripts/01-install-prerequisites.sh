@@ -34,18 +34,8 @@ if ! command -v brew &>/dev/null; then
 fi
 info "Homebrew found"
 
-# Check Docker
-if ! command -v docker &>/dev/null; then
-    echo "❌ Docker Desktop is required. Install from https://www.docker.com/products/docker-desktop/"
-    exit 1
-fi
-if ! docker info &>/dev/null 2>&1; then
-    warn "Docker is installed but not running. Please start Docker Desktop."
-    exit 1
-fi
-info "Docker is running"
-
-# Install tools
+# Install tools first. Don't gate this on Docker — a fresh Mac has no Docker,
+# and aborting here left minikube/helm uninstalled with a confusing exit.
 install_if_missing minikube
 install_if_missing kubectl
 install_if_missing helm
@@ -58,9 +48,34 @@ install_if_missing crane
 # signing-config (Cosign 3.x replaces --tlog-upload=false).
 install_if_missing jq
 
+# Docker Desktop is the Minikube driver. Check it last and warn (not exit)
+# so this script always leaves the CLI tools in place.
+docker_ok=true
+if ! command -v docker &>/dev/null; then
+    warn "Docker Desktop is not installed — Minikube's docker driver needs it."
+    warn "Install it from https://www.docker.com/products/docker-desktop/ (or: brew install --cask docker)"
+    docker_ok=false
+elif ! docker info &>/dev/null 2>&1; then
+    # Match Minikube's own failure exactly: it connects over this socket.
+    if [[ ! -S /var/run/docker.sock ]]; then
+        warn "Docker is installed but the daemon is not running (no /var/run/docker.sock)."
+    else
+        warn "Docker is installed but 'docker info' failed. Try restarting Docker Desktop."
+    fi
+    warn "Start Docker Desktop (open -a Docker) and wait for it to finish booting."
+    docker_ok=false
+fi
+
 echo ""
 echo "================================================"
-echo "  ✅ All prerequisites installed!"
-echo ""
-echo "  Next: ./scripts/02-start-cluster.sh"
+if [[ "$docker_ok" == true ]]; then
+    echo "  ✅ All prerequisites installed!"
+    echo ""
+    echo "  Next: ./scripts/02-start-cluster.sh"
+else
+    echo "  ⚠️  CLI tools installed, but Docker needs attention."
+    echo ""
+    echo "  1. Install/start Docker Desktop and confirm: docker info"
+    echo "  2. Then run: ./scripts/02-start-cluster.sh"
+fi
 echo "================================================"

@@ -7,14 +7,65 @@
 The `01-install-prerequisites.sh` script installs tools via Homebrew. If it failed:
 
 ```bash
-chmod +x scripts/01-install-prerequisites.sh
+chmod +x scripts/*.sh
 ./scripts/01-install-prerequisites.sh
 ```
 
-Or manually install:
+Or manually install (the Homebrew formula for the Kyverno CLI is `kyverno`; there is no `kyverno-cli` formula):
 ```bash
-brew install minikube kubectl helm kyverno-cli cosign crane jq
+brew install minikube kubectl helm kyverno cosign crane jq
 ```
+
+If a tool is installed but still "not found", your shell's `PATH` doesn't
+include Homebrew's bin. For Apple Silicon:
+
+```bash
+echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
+```
+
+Open a new terminal (or re-source your profile) afterwards.
+
+### `minikube: command not found` when running `02-start-cluster.sh`
+
+Minikube (or Helm) isn't installed, or was installed after the terminal was
+opened. Run Step 1 first, then retry:
+
+```bash
+./scripts/01-install-prerequisites.sh
+./scripts/02-start-cluster.sh
+```
+
+`02-start-cluster.sh` now checks for `minikube`, `helm`, `kubectl`, and
+`docker` up front and tells you exactly which one is missing.
+
+<a id="minikube-provider-docker-not-found-or-docker-errors"></a>
+
+### `PROVIDER_DOCKER_NOT_FOUND` / `PROVIDER_DOCKER_VERSION_EXIT_1` / `dial unix /var/run/docker.sock`
+
+These all mean Minikube's `docker` driver can't reach a running Docker daemon:
+
+| Error | Meaning |
+| --- | --- |
+| `PROVIDER_DOCKER_NOT_FOUND` | `docker` is not installed (or not on `PATH`) |
+| `PROVIDER_DOCKER_VERSION_EXIT_1` (docker API unreachable) | Docker is installed but the daemon isn't running |
+
+Both are fixed the same way — install and start Docker Desktop, then retry:
+
+```bash
+# Install (skip if Docker Desktop is already installed)
+brew install --cask docker
+
+# Start it and wait for the whale icon to stop animating
+open -a Docker
+
+# Confirm the daemon is reachable before retrying
+docker info
+```
+
+Once `docker info` lists a `Server:` section without errors, run
+`./scripts/02-start-cluster.sh` again. `01-install-prerequisites.sh` installs
+the CLI tools regardless of Docker state and warns you if Docker needs attention.
 
 ### "Docker Desktop is not running"
 

@@ -83,9 +83,15 @@ cd kyverno-in-action
 ### Prerequisites
 
 - **macOS** (scripts use Homebrew; adapt for Linux)
-- **Docker Desktop** running
+- **Docker Desktop** installed and running — this is Minikube's driver on macOS.
+  Make sure it's fully booted before Step 2: `docker info` should succeed and
+  `/var/run/docker.sock` should exist.
 - ~6 GB RAM available for Minikube
 - Python 3 on your `PATH` (used by `03-deploy-app.sh` to inject the Cosign public key)
+
+> **See a `command not found` or `PROVIDER_DOCKER_NOT_FOUND` error?** Check
+> [TROUBLESHOOTING.md](TROUBLESHOOTING.md#minikube-provider-docker-not-found-or-docker-errors)
+> — it maps each setup error you may hit to its fix.
 
 ### Step 1: Install Tools
 

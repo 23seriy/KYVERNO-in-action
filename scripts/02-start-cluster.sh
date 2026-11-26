@@ -24,6 +24,29 @@ echo "  🛡️  Kyverno in Action — Cluster Setup"
 echo "================================================"
 echo ""
 
+# Fail fast with an actionable message instead of a bare "command not found"
+# (minikube/helm) or Minikube's PROVIDER_DOCKER_NOT_FOUND halfway through.
+require_tool() {
+    local tool=$1 hint=$2
+    if ! command -v "$tool" &>/dev/null; then
+        error "'$tool' is not installed or not on your PATH."
+        error "Fix: $hint"
+        error "Or run: ./scripts/01-install-prerequisites.sh"
+        exit 1
+    fi
+}
+
+require_tool minikube "brew install minikube"
+require_tool helm "brew install helm"
+require_tool kubectl "brew install kubectl"
+require_tool docker "install Docker Desktop from https://www.docker.com/products/docker-desktop/"
+
+if ! docker info &>/dev/null 2>&1; then
+    error "Docker is installed but the daemon isn't responding."
+    error "Start Docker Desktop (open -a Docker) and wait for the whale icon to stop animating."
+    exit 1
+fi
+
 # Reuse or recreate profile
 if minikube status -p "$PROFILE" &>/dev/null 2>&1; then
     warn "Minikube profile '$PROFILE' already exists."
